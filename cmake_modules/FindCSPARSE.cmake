@@ -3,6 +3,7 @@ FIND_PATH(CSPARSE_INCLUDE_DIR NAMES cs.h
   PATHS
   /usr/include/suitesparse
   /usr/include
+  /usr/include/local
   /opt/local/include
   /usr/local/include
   /sw/include
@@ -10,6 +11,7 @@ FIND_PATH(CSPARSE_INCLUDE_DIR NAMES cs.h
   /opt/local/include/ufsparse
   /usr/local/include/ufsparse
   /sw/include/ufsparse
+  /usr/lib/x86_64-linux-gnu/
   )
 
 FIND_LIBRARY(CSPARSE_LIBRARIES NAMES cxsparse
@@ -18,6 +20,7 @@ FIND_LIBRARY(CSPARSE_LIBRARIES NAMES cxsparse
   /usr/local/lib
   /opt/local/lib
   /sw/lib
+  /usr/lib/x86_64-linux-gnu/
   )
 
 include(FindPackageHandleStandardArgs)

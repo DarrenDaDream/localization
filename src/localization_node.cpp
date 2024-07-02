@@ -29,6 +29,7 @@
 #include <ros/ros.h>
 
 #include "localization.h"
+#include <boost/format.hpp>
 
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>

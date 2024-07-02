@@ -161,6 +161,7 @@ add_dependencies(localization_node
 target_link_libraries(localization_node
     ${EIGEN3_LIBRARIES}
     ${catkin_LIBRARIES}
+    ${CSPARSE_LIBRARIES}
     localization
 )
 

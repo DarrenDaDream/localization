@@ -27,6 +27,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "localization.h"
+#include <boost/format.hpp>
 
 
 Localization::Localization(ros::NodeHandle n)
