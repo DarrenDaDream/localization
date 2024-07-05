@@ -33,6 +33,7 @@
 
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+#include <cf_msgs/Tdoa.h>
 
 using namespace std;
 using namespace message_filters;

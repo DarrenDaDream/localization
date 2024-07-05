@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<launch>
+
+
+    <param name ="/use_sim_time" value="true"/>
+
+    <arg name="dataset" value="const1-trial1-tdoa2"/>
+
+
+    <rosparam file="$(find localization)/cfg/Utilanchor.yaml" command="load" />
+
+    <node name="rosbag_play" pkg="rosbag" type="play" output="log" args="-s 1 --clock /home/darren/util-uwb-dataset/dataset/flight-dataset/rosbag-data/const1/$(arg dataset).bag"/>
+    <node pkg="localization" type="localization_tdoa_to_twr_node" name="tdoa2twrconverter"  output="screen" />
+  
+    <!-- <node pkg="localization" type="localization_node" name="localization_node" output="screen">
+        <rosparam command="delete" param="topic" />
+        <rosparam file="$(find localization)/cfg/util.yaml" command="load" />
+        <param name="log/filename_prefix" value="$(find localization)/bag/$(arg dataset)" />
+    </node> -->
+
+
+
+    <!-- <node pkg="hector_trajectory_server" type="hector_trajectory_server" name="localization_trajectory_server">
+        <param name="/target_frame_name" value="vicon" />
+        <param name="/source_frame_name" value="optimizer" />
+        <param name="/trajectory_update_rate" value="20.0" />
+        <param name="/trajectory_publish_rate" value="20.0" />
+    </node> -->
+
+    <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find localization)/example.rviz" /> -->
+
+</launch>

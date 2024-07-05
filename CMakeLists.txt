@@ -18,9 +18,10 @@ find_package(catkin REQUIRED COMPONENTS
     roscpp
     rospy
     std_msgs
+    cf_msgs
 )
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -O3 -march=native")
+set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -O3 -march=native")
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
@@ -130,8 +131,12 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src/localization
 )
 
+add_executable(${PROJECT_NAME}_tdoa_to_twr_node src/tdoa2twrconverter.cpp)
+add_dependencies(${PROJECT_NAME}_tdoa_to_twr_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(${PROJECT_NAME}_tdoa_to_twr_node ${catkin_LIBRARIES})
+
 # Uncomment this definition to use decawave's uwb radios
-add_definitions(-DTIME_DOMAIN)
+# add_definitions(-DTIME_DOMAIN)
 
 # Uncomment this definition to enable relative localization
 # add_definitions(-DRELATIVE_LOCALIZATION)
