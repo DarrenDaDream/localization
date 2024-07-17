@@ -9,9 +9,9 @@
 
     <rosparam file="$(find uwb_driver)/cfg/anchor.yaml" command="load" />
 
-    <node name="rosbag_play" pkg="rosbag" type="play" output="screen" args="-s 1 --clock $(find localization)/bag/$(arg dataset).bag"/>
+    <node name="rosbag_play" pkg="rosbag" type="play" output="log" args="-s 1 --clock $(find localization)/bag/$(arg dataset).bag"/>
   
-    <node pkg="localization" type="localization_node" name="localization_node" output="screen">
+    <node pkg="localization" type="localization_node" name="localization_node" output="log">
         <rosparam command="delete" param="topic" />
         <rosparam file="$(find localization)/cfg/uwb_only_lps.yaml" command="load" />
         <param name="log/filename_prefix" value="$(find localization)/bag/$(arg dataset)" />

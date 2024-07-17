@@ -28,10 +28,24 @@
 
 #include "localization.h"
 #include <boost/format.hpp>
+#include "cf_msgs/Tdoa.h"
+#include "../include/Linearizer.h"
+#include "../include/Accumulator.h"
+#include "../include/utils/tic_toc.h"
+
+
+Eigen::aligned_deque<TDOAData> tdoa_buff;
+Eigen::aligned_deque<TDOAData> tdoa_window;
+Parameters param;
+CalibParam calib_param;
+const double NS_TO_S = 1e-9;
+
 
 
 Localization::Localization(ros::NodeHandle n)
 {
+    
+
     pose_realtime_pub = n.advertise<geometry_msgs::PoseStamped>("realtime/pose", 1);
 
     pose_optimized_pub = n.advertise<geometry_msgs::PoseStamped>("optimized/pose", 1);
@@ -39,6 +53,7 @@ Localization::Localization(ros::NodeHandle n)
     path_optimized_pub = n.advertise<nav_msgs::Path>("optimized/path", 1);
 
     number_measurements = 0;
+
 
 
 // For g2o optimizer
@@ -76,7 +91,7 @@ Localization::Localization(ros::NodeHandle n)
     if(n.param("robot/maximum_velocity", robot_max_velocity, 1.0))
         ROS_WARN("Using robot maximum_velocity: %fm/s", robot_max_velocity);
 
-    if(n.param("robot/distance_outlier", distance_outlier, 1.0))
+    if(n.param("robot/distance_outlier", distance_outlier, 5.0))
         ROS_WARN("Using uwb outlier rejection distance: %fm", distance_outlier);
 
 
@@ -193,6 +208,8 @@ void Localization::solve()
 }
 
 
+
+
 void Localization::publish()
 {
     double error = optimizer.chi2();
@@ -204,6 +221,8 @@ void Localization::publish()
         ROS_WARN("Skip optimization with error: %f ", error);
         return;
     }
+    
+   
     
 
     auto pose = robots.at(self_id).current_pose();
@@ -289,11 +308,141 @@ void Localization::addPoseEdge(const geometry_msgs::PoseWithCovarianceStamped::C
         publish();
     }
 }
+void Localization::findClosestNWithOrderedID(double t_s, int N, std::vector<int>& idx) const
+ {
+    std::vector<std::pair<std::pair<int,int>,double>> diff;
+    for (auto it = tdoa_buff.begin(); it != tdoa_buff.end(); it++) {
+        double t = it->time_ns * NS_TO_S;
+        diff.push_back(std::make_pair(std::make_pair(it->idA, it->idB), std::abs(t - t_s)));
+    }
+
+    int idA = 0;
+    int idB = 1; 
+    for (int i = 0; i < N; i++) {
+        size_t idx_min = 0;
+        std::pair<std::pair<int,int>,double> it_min = diff[idx_min];
+        for (size_t j = 1; j < diff.size(); j++) {
+            std::pair<std::pair<int,int>,double> it = diff[j];
+            if (it.first == std::make_pair(idA, idB)) {
+                idx_min = it.second < it_min.second ? j : idx_min;
+                it_min = diff[idx_min];
+            }
+        }
+        idx[i] = idx_min;
+        idA++;
+        idB++;
+        diff[idx_min].second = std::numeric_limits<double>::max();
+    }
+}
+
+void Localization::getTdoaCallback(const cf_msgs::Tdoa::ConstPtr& msg)
+{
+    TDOAData uwb(msg->header.stamp.toNSec(), msg->idA, msg->idB, msg->data);
+    tdoa_buff.push_back(uwb);
+}
+
+Eigen::Vector3d Localization::tdoaMultilateration(double t_s) const
+{
+    static Eigen::Vector3d last_knot(0, 0, 0);
+    static bool set_origin = true;
+    int num_data = 7;
+    std::vector<int> idx(num_data);
+    findClosestNWithOrderedID(t_s, num_data, idx);
+    Eigen::Vector3d pos;
+    Eigen::MatrixXd H(num_data, 4);
+    Eigen::VectorXd b(num_data);
+    Eigen::Vector3d anchor0 = param.anchor_list.at(0);
+    std::vector<double> range;
+    range.push_back(tdoa_buff.at(idx[0]).data);
+    for (int i = 1; i < num_data; i++) {
+        range.push_back(range[i - 1] + tdoa_buff.at(idx[i]).data);
+    }
+    for (int i = 0; i < num_data; i++) {
+        TDOAData uwb = tdoa_buff.at(idx[i]);
+        double range0 = range[i];
+        Eigen::Vector3d anchori = param.anchor_list.at(uint16_t(uwb.idB));
+        H.row(i) = Eigen::Vector4d(anchori.x() - anchor0.x(), anchori.y() - anchor0.y(), anchori.z() - anchor0.z(), range0);
+        b[i] = range0 * range0 - anchori.dot(anchori) + anchor0.dot(anchor0);
+    }
+    H *= -2;
+    Eigen::VectorXd x = (H.transpose() * H).inverse() * H.transpose() * b;
+    pos =  x.head(3);
+    if (!set_origin) {
+        pos.setZero();
+        set_origin = true;
+    } else {
+        pos = calib_param.q_nav_uwb.inverse() * (pos - calib_param.t_nav_uwb);
+    }
+    return pos;
+}
 
 
+void Localization::addTdoaEdge(const cf_msgs::Tdoa::ConstPtr& tdoa_msg)
+{
+        ++number_measurements;
 
+    // Estimate position using TDOA multilateration
+    Eigen::Vector3d tdoa_position = tdoaMultilateration(tdoa_msg->header.stamp.toNSec());
 
+    // Estimate the distance between the requester and the responder
+    double distance_estimation = (robots.at(tdoa_msg->idA).last_vertex()->estimate().translation() - tdoa_position).norm();
 
+    if (number_measurements > trajectory_length && abs(distance_estimation - tdoa_msg->data) > distance_outlier)
+    {
+        ROS_WARN("Reject TDOA ID: %d measurement: %fm", tdoa_msg->idB, tdoa_msg->data);
+        return;
+    }
+
+    double dt_requester = tdoa_msg->header.stamp.toSec() - robots.at(tdoa_msg->idA).last_header().stamp.toSec();
+    double distance_cov = pow(tdoa_msg->data, 2);
+    double cov_requester = pow(robot_max_velocity * dt_requester / 3, 2); // 3 sigma principle
+
+    auto vertex_last_requester = robots.at(tdoa_msg->idA).last_vertex();
+    auto vertex_responder = robots.at(tdoa_msg->idB).new_vertex(sensor_type.range, tdoa_msg->header, optimizer);
+    
+    auto frame_id = robots.at(tdoa_msg->idA).last_header().frame_id;
+
+    if ((frame_id.find(tdoa_msg->header.frame_id) != std::string::npos) || (frame_id.find("none") != std::string::npos))
+    {
+        auto vertex_requester = robots.at(tdoa_msg->idA).new_vertex(sensor_type.range, tdoa_msg->header, optimizer);
+
+        auto edge = create_range_edge(vertex_requester, vertex_responder, tdoa_msg->data, distance_cov);
+
+        optimizer.addEdge(edge);
+
+        auto edge_requester_range = create_range_edge(vertex_last_requester, vertex_requester, 0, cov_requester);
+
+        optimizer.addEdge(edge_requester_range);
+
+        ROS_INFO("Added TDOA requester range edge on id: <%d>", tdoa_msg->idB);
+    }
+    else
+    {
+        auto edge = create_range_edge(vertex_last_requester, vertex_responder, tdoa_msg->data, distance_cov + cov_requester);
+
+        optimizer.addEdge(edge);
+
+        ROS_INFO("Added TDOA requester edge with id: <%d>", tdoa_msg->idB);
+    }
+
+    if (!robots.at(tdoa_msg->idB).is_static())
+    {
+        double dt_responder = tdoa_msg->header.stamp.toSec() - robots.at(tdoa_msg->idB).last_header().stamp.toSec();
+        double cov_responder = pow(robot_max_velocity * dt_responder / 3, 2); // 3 sigma principle
+
+        auto edge_responder_range = create_range_edge(vertex_last_requester, vertex_responder, 0, cov_responder);
+
+        optimizer.addEdge(edge_responder_range);
+
+        ROS_INFO("Added TDOA responder trajectory edge;");
+    }
+
+    if (publish_range && number_measurements > trajectory_length)
+    {
+        solve();
+        publish();
+    }
+}
 #ifdef TIME_DOMAIN
 void Localization::addRangeEdge(const uwb_driver::UwbRange::ConstPtr& uwb)
 #else

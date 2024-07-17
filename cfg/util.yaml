@@ -1,20 +1,16 @@
 # parameters for robots
 robot:
-  trajectory_length: 20
-  maximum_velocity: 10
-  distance_outlier: 5
+  trajectory_length: 15
+  maximum_velocity: 2.0
 
 # parameters for g2o optimizer
 optimizer:
-  maximum_iteration: 20
-  minimum_optimize_error: 10000
-  # if the optimization error is larger than this value, that estimation will be skipped
+  maximum_iteration: 10
   verbose: false
 
 # parameters for topic subscription
 topic:
-  range: /tdoa_data
-  imu: /imu_data
+  tdoa: /tdoa_data
 
 publish_flag:
   tf: true

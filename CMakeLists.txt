@@ -21,12 +21,13 @@ find_package(catkin REQUIRED COMPONENTS
     cf_msgs
 )
 
-set(CMAKE_CXX_FLAGS "-std=c++14 -Wall -O3 -march=native")
+
+set(CMAKE_CXX_FLAGS "-std=c++17 -Wall -O3 -march=native")
 
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
 find_package(G2O REQUIRED)
-find_package(Eigen3 3.2 REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(Cholmod REQUIRED)
 find_package(CSPARSE REQUIRED)
 
@@ -117,10 +118,10 @@ generate_dynamic_reconfigure_options(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
- # INCLUDE_DIRS include
+ INCLUDE_DIRS include
  LIBRARIES localization
  CATKIN_DEPENDS eigen_conversions geometry_msgs message_generation message_runtime message_filters roscpp rospy std_msgs
- DEPENDS system_lib
+ DEPENDS system_lib EIGEN3
 )
 
 # Specify additional locations of header files
@@ -129,14 +130,16 @@ include_directories(
     ${catkin_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/src/types
     ${PROJECT_SOURCE_DIR}/src/localization
-)
+    ${EIGEN3_INCLUDE_DIRS}
+    ${PROJECT_SOURCE_DIR}/include
+    )
 
 add_executable(${PROJECT_NAME}_tdoa_to_twr_node src/tdoa2twrconverter.cpp)
 add_dependencies(${PROJECT_NAME}_tdoa_to_twr_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(${PROJECT_NAME}_tdoa_to_twr_node ${catkin_LIBRARIES})
 
 # Uncomment this definition to use decawave's uwb radios
-# add_definitions(-DTIME_DOMAIN)
+add_definitions(-DTIME_DOMAIN)
 
 # Uncomment this definition to enable relative localization
 # add_definitions(-DRELATIVE_LOCALIZATION)

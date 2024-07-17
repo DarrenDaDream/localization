@@ -41,6 +41,8 @@
 #include <time.h>
 #include <ros/ros.h>
 #include <Eigen/Dense>
+#include <deque>
+#include <Eigen/Core>
 #include <eigen_conversions/eigen_msg.h>
 #include <boost/concept_check.hpp>
 #include <g2o/core/sparse_optimizer.h>
@@ -76,6 +78,7 @@
 #endif
 #include "lib.h"
 #include "robot.h"
+#include "cf_msgs/Tdoa.h"
 
 using namespace std;
 
@@ -101,6 +104,7 @@ class Localization
 public:
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    
 
     Localization(ros::NodeHandle);
 
@@ -125,9 +129,40 @@ public:
 #ifdef RELATIVE_LOCALIZATION
     void addRLRangeEdge(const uwb_reloc::uwbTalkData::ConstPtr&);
 #endif
+    void getTdoaCallback(const cf_msgs::Tdoa::ConstPtr&);
+    void addTdoaEdge(const cf_msgs::Tdoa::ConstPtr&);
+    Eigen::Vector3d tdoaMultilateration(double t_s) const;
+    void findClosestNWithOrderedID(double t_s, int N, std::vector<int>& idx) const;
     void configCallback(localization::localizationConfig&, uint32_t);
 
+
 private:
+    
+    
+    size_t window_count;
+    int window_size;
+    int n_window_calib;
+
+    int64_t dt_ns;
+    int64_t bag_start_time;
+    int64_t last_imu_t_ns;
+    int64_t next_knot_TimeNs;
+
+    enum SolverFlag {
+        INITIAL,
+        FULLSIZE
+    };
+    SolverFlag solver_flag;
+
+    size_t bias_block_offset;
+    size_t gravity_block_offset;
+    size_t hess_size;
+    bool pose_fixed;
+    int max_iter;
+    double lambda;
+    double lambda_vee;
+    double average_runtime;
+    std::vector<double> v_toa_offset;
 
     Jeffsan::CPPTimer timer;
 
